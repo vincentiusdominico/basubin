@@ -1,0 +1,24 @@
+{
+  "ip": "192.168.1.3",
+  "name": "Device C",
+  "model": "Model X1",
+  "isOpen": true,
+  "isLock": false,
+  "capacity": 100,
+  "temperature": 25,
+  "humidity": 40,
+  "running": {
+    "process": "Cleaning",
+    "startedAt": "2023-06-15T09:24:00",
+    "finishedAt": "2023-06-15T10:24:00"
+  },
+  "error": {
+    "message": "",
+    "createdAt": null
+  },
+  "connection": {
+    "ssid": "Wifi Saya",
+    "strength": "80"
+  },
+  "lastActiveAt": "2023-06-15T11:24:00"
+}
