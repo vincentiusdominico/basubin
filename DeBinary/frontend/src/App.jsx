@@ -16,8 +16,8 @@ function App() {
           <Sidebar />
           <div className="pages">
             <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/device" element={<Devices />} />
+              {/* <Route path="/" element={<Home />} /> */}
+              <Route path="/" element={<Devices />} />
             </Routes>
           </div>
         </BrowserRouter>
