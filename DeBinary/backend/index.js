@@ -1,20 +1,42 @@
+require("dotenv").config();
 const express = require("express");
+const cors = require("cors");
 const expressLayouts = require("express-ejs-layouts");
 
-require("./utils/database");
-
-const Users = require("./Models/customer");
+const userRoutes = require("./routes/users");
+const deviceRoutes = require("./routes/devices");
 
 const app = express();
-const port = 3000;
+app.use(cors());
 
-// Home Page
-app.get("/customers", (req, res) => {
-  Users.find().then((users) => {
-    res.send(users);
-  });
-});
+const PORT = process.env.PORT;
+const URI = process.env.MONGO_URI;
 
-app.listen(port, () => {
-  console.log(`lisetinang at ${port}`);
-});
+const mongoose = require("mongoose");
+const dotenv = require("dotenv");
+
+mongoose
+  .connect(URI)
+  .then(() => {
+    console.log("Connected Successfully");
+    app.listen(process.env.PORT, () => {
+      console.log(`lisetinang at ${process.env.PORT}`);
+    });
+
+    // middleware
+    app.use(express.json());
+
+    app.use((req, res, next) => {
+      console.log(req.path, req.method);
+      next();
+    });
+
+    // routes
+    app.get("/", (req, res) => {
+      res.json("yup");
+    });
+
+    app.use("/api/user", userRoutes);
+    app.use("/api/device", deviceRoutes);
+  })
+  .catch((error) => console.log(error));

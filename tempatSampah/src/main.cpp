@@ -29,7 +29,10 @@ Adafruit_BME280 bme;
 
 const char *server = "basubin-api.vercel.app";
 const int port = 8000;
-const char *endpoint = "/id";
+const char *endpoint = "/api/server";
+
+// File path for storing credentials
+const char *filePath = "/credential.txt";
 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
@@ -284,6 +287,103 @@ void readCredentialsFromFS(char *ssid, char *password)
     }
 }
 
+String parseResponseForId(String response)
+{
+    // Example: Parse JSON response to extract _id
+    // Modify according to your API's response format
+    // This is a simplified example assuming JSON format
+    String idMarker = "\"_id\":";
+    int idIndex = response.indexOf(idMarker);
+    if (idIndex == -1)
+    {
+        Serial.println("No _id found in response");
+        return "";
+    }
+
+    // Find end of _id value
+    int idStart = idIndex + idMarker.length();
+    int idEnd = response.indexOf(",", idStart);
+    if (idEnd == -1)
+    {
+        idEnd = response.indexOf("}", idStart);
+    }
+
+    if (idEnd == -1)
+    {
+        Serial.println("Invalid _id format in response");
+        return "";
+    }
+
+    // Extract _id
+    String idValue = response.substring(idStart, idEnd);
+    idValue.trim();
+
+    return idValue;
+}
+
+String sendPostRequest()
+{
+    WiFiClient client;
+
+    if (!client.connect(server, port))
+    {
+        Serial.println("Connection to API failed");
+        return "";
+    }
+
+    // Construct POST data
+    String postData = "some_data_to_send";
+
+    // Send POST request
+    client.print(String("POST ") + endpoint + " HTTP/1.1\r\n" +
+                 "Host: " + server + "\r\n" +
+                 "Content-Type: application/x-www-form-urlencoded\r\n" +
+                 "Content-Length: " + postData.length() + "\r\n" +
+                 "Connection: close\r\n\r\n" +
+                 postData);
+
+    unsigned long timeout = millis();
+    while (client.available() == 0)
+    {
+        if (millis() - timeout > 5000)
+        {
+            Serial.println("Client Timeout !");
+            client.stop();
+            return "";
+        }
+    }
+
+    // Read response from server
+    String response = "";
+    while (client.available())
+    {
+        response += client.readStringUntil('\r');
+    }
+
+    // Extract _id from response (example)
+    String responseId = parseResponseForId(response);
+
+    // Close connection
+    client.stop();
+
+    return responseId;
+}
+
+void saveIdToFile(String id)
+{
+    File file = LittleFS.open(filePath, "w");
+    if (!file)
+    {
+        Serial.println("Failed to open file for writing");
+        return;
+    }
+
+    // Write _id to file
+    file.println(id);
+    file.close();
+
+    Serial.println("Saved _id to file");
+}
 class MyServerCallbacks : public BLEServerCallbacks
 {
     void onConnect(BLEServer *pServer)
@@ -369,6 +469,11 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks
                 pOutputCharacteristic->setValue("success");
                 pOutputCharacteristic->notify();
                 saveCredentialsToFS(ssid, password);
+
+                // Make HTTP POST request to API
+                String responseId = sendPostRequest();
+                Serial.print("Response _id: ");
+                Serial.println(responseId);
             }
         }
     }
@@ -484,50 +589,60 @@ void sendToAPI(float temperature, float pressure, float altitude, float humidity
 // Function to display sensor readings on OLED
 void printValues()
 {
+    // Read sensor data
+    float temperature = bme.readTemperature();
+    float pressure = bme.readPressure() / 100.0F;
+    float altitude = bme.readAltitude(SEALEVELPRESSURE_HPA);
+    float humidity = bme.readHumidity();
+
+    // Display on OLED
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
     display.setCursor(0, 0);
     display.print("Temperature: ");
-    display.print(bme.readTemperature());
+    display.print(temperature);
     display.println(" C");
 
     display.setCursor(0, 10);
     display.print("Pressure: ");
-    display.print(bme.readPressure() / 100.0F);
+    display.print(pressure);
     display.println(" hPa");
 
     display.setCursor(0, 20);
     display.print("Altitude: ");
-    display.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
+    display.print(altitude);
     display.println(" m");
 
     display.setCursor(0, 30);
     display.print("Humidity: ");
-    display.print(bme.readHumidity());
+    display.print(humidity);
     display.println(" %");
 
     display.display();
 
-    // Also print to Serial for debugging
+    // Print to Serial for debugging
     Serial.print("Temperature = ");
-    Serial.print(bme.readTemperature());
+    Serial.print(temperature);
     Serial.println(" °C");
 
     Serial.print("Pressure = ");
-    Serial.print(bme.readPressure() / 100.0F);
+    Serial.print(pressure);
     Serial.println(" hPa");
 
     Serial.print("Approx. Altitude = ");
-    Serial.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
+    Serial.print(altitude);
     Serial.println(" m");
 
     Serial.print("Humidity = ");
-    Serial.print(bme.readHumidity());
+    Serial.print(humidity);
     Serial.println(" %");
 
     Serial.println();
+
+    // Send sensor data to API
+    sendToAPI(temperature, pressure, altitude, humidity);
 }
 
 void setup()
@@ -563,5 +678,6 @@ void setup()
 
 void loop()
 {
-    displayTextCentered("SDSOn", 1, SSD1306_WHITE);
+    printValues();
+    delay(30000);
 }
