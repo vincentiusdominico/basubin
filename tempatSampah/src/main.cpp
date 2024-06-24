@@ -8,11 +8,28 @@
 #include <WiFi.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+
+#define BME_SCK 13
+#define BME_MISO 12
+#define BME_MOSI 11
+#define BME_CS 10
+
+#define SEALEVELPRESSURE_HPA (1013.25)
+
+Adafruit_BME280 bme;
 
 #define FORMAT_LITTLEFS_IF_FAILED true
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+const char *server = "basubin-api.vercel.app";
+const int port = 8000;
+const char *endpoint = "/id";
 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
@@ -256,7 +273,8 @@ void readCredentialsFromFS(char *ssid, char *password)
         Serial.println("failed to connect");
         displayTextCentered("Failed to Connect", 1, SSD1306_WHITE);
         delay(2000);
-        // MENUSS
+        LittleFS.remove("/env.txt");
+        Serial.println("env.txt deleted");
     }
     else
     {
@@ -420,6 +438,98 @@ void startingPoint()
     }
 }
 
+void sendToAPI(float temperature, float pressure, float altitude, float humidity)
+{
+    WiFiClient client;
+
+    if (!client.connect(server, port))
+    {
+        Serial.println("Connection to API failed");
+        return;
+    }
+
+    String url = String(endpoint) + "?temperature=" + String(temperature, 2) + "&pressure=" + String(pressure, 2) + "&altitude=" + String(altitude, 2) + "&humidity=" + String(humidity, 2);
+
+    Serial.print("Sending data to API: ");
+    Serial.println(url);
+
+    client.print(String("POST ") + url + " HTTP/1.1\r\n" +
+                 "Host: " + server + "\r\n" +
+                 "Connection: close\r\n\r\n");
+
+    unsigned long timeout = millis();
+    while (client.available() == 0)
+    {
+        if (millis() - timeout > 5000)
+        {
+            Serial.println("Client Timeout !");
+            client.stop();
+            return;
+        }
+    }
+
+    // Read response from server
+    while (client.available())
+    {
+        String line = client.readStringUntil('\r');
+        Serial.print(line);
+    }
+
+    Serial.println();
+    Serial.println("Data sent to API");
+
+    client.stop();
+}
+
+// Function to display sensor readings on OLED
+void printValues()
+{
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+
+    display.setCursor(0, 0);
+    display.print("Temperature: ");
+    display.print(bme.readTemperature());
+    display.println(" C");
+
+    display.setCursor(0, 10);
+    display.print("Pressure: ");
+    display.print(bme.readPressure() / 100.0F);
+    display.println(" hPa");
+
+    display.setCursor(0, 20);
+    display.print("Altitude: ");
+    display.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
+    display.println(" m");
+
+    display.setCursor(0, 30);
+    display.print("Humidity: ");
+    display.print(bme.readHumidity());
+    display.println(" %");
+
+    display.display();
+
+    // Also print to Serial for debugging
+    Serial.print("Temperature = ");
+    Serial.print(bme.readTemperature());
+    Serial.println(" °C");
+
+    Serial.print("Pressure = ");
+    Serial.print(bme.readPressure() / 100.0F);
+    Serial.println(" hPa");
+
+    Serial.print("Approx. Altitude = ");
+    Serial.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
+    Serial.println(" m");
+
+    Serial.print("Humidity = ");
+    Serial.print(bme.readHumidity());
+    Serial.println(" %");
+
+    Serial.println();
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -446,6 +556,9 @@ void setup()
     Wire.begin();
 
     startingPoint();
+
+    unsigned status;
+    status = bme.begin(0x76);
 }
 
 void loop()
