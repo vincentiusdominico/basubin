@@ -208,8 +208,8 @@ const AddDeviceForm = () => {
         return;
       }
 
-      const characteristic = await bleServiceFound.getCharacteristic(inputCharacteristic);
-      if (!characteristic) {
+      const inputCharacteristic = await bleServiceFound.getCharacteristic(inputCharacteristicUUID);
+      if (!inputCharacteristic) {
         console.error("Input characteristic not found.");
         return;
       }
@@ -218,10 +218,29 @@ const AddDeviceForm = () => {
       const jsonStr = JSON.stringify(data);
       const dataArrayBuffer = new TextEncoder().encode(jsonStr);
 
-      await characteristic.writeValue(dataArrayBuffer);
+      await inputCharacteristic.writeValue(dataArrayBuffer);
       console.log("Parameters sent to ESP32:", data);
+
+      // Assuming there's a characteristic that sends responses back
+      const responseCharacteristic = await bleServiceFound.getCharacteristic(responseCharacteristicUUID);
+      if (!responseCharacteristic) {
+        console.error("Response characteristic not found.");
+        return;
+      }
+
+      // Read the response from the ESP32
+      const responseValue = await responseCharacteristic.readValue();
+      const responseText = new TextDecoder().decode(responseValue);
+
+      // Check if the response indicates success
+      if (responseText === "success") {
+        setBleState("activated");
+        console.log("ESP32 response: success, BLE state set to activated");
+      } else {
+        console.log("ESP32 response:", responseText);
+      }
     } catch (error) {
-      console.error("Error sending parameters:", error);
+      console.error("Error sending parameters or reading response:", error);
     }
   };
 
@@ -294,44 +313,8 @@ const AddDeviceForm = () => {
           ))}
         </ul>
       </li>
-      <li className={`slide ${bleState === "Connectedf" ? "" : "next"}`}>
-        <p>
-          BLE state:{" "}
-          <strong>
-            <span style={{ color: bleStateColor }}>{bleState}</span>
-          </strong>
-        </p>
-        <h2>Fetched Value</h2>
-        <p>
-          <span>{valueContainer}</span>
-        </p>
-        <p>
-          Last reading: <span>{timestamp}</span>
-        </p>
-        <h2>Control GPIO 2</h2>
-        <button onClick={() => writeOnCharacteristic(1)}>Scan Wifi</button>
-        <button onClick={() => writeOnCharacteristic(0)}>OFF</button>
-        <p>
-          Last value sent: <span>{valueSent}</span>
-        </p>
-        <ul>
-          {networks.map((network, index) => (
-            <li key={index}>
-              <div>
-                <strong>SSID:</strong> {network.ssid} <br />
-                <strong>RSSI:</strong> {network.rssi}
-                <label htmlFor="password">Password:</label>
-                <input type="text" id="password" />
-              </div>
-            </li>
-          ))}
-        </ul>
-        <p>
-          <a href="https://randomnerdtutorials.com/">Created by RandomNerdTutorials.com</a>
-        </p>
-        <p>
-          <a href="https://RandomNerdTutorials.com/esp32-web-bluetooth/">Read the full project here.</a>
-        </p>
+      <li className={`slide ${bleState === "Connectedf" ? "" : bleState === "activated" ? "prev" : "next"}`}>
+        <button>Go to Device</button>
       </li>
     </ol>
   );
