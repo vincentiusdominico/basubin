@@ -15,6 +15,10 @@ const URI = process.env.MONGO_URI;
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 
+app.get("/", (req, res) => {
+  res.send("Hello World");
+});
+
 mongoose
   .connect(URI)
   .then(() => {
